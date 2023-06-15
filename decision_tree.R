@@ -2,38 +2,45 @@ library(conflicted)
 library(tidyverse)
 library("arules")
 library("arulesViz")
+library(rpart)
+library(rpart.plot)
 conflict_prefer("filter", "dplyr")
 conflict_prefer("lag", "dplyr")
 
-end_table_path <- "D:\\Studium\\data mining\\Projekt\\tabelle_saison_csv"
+end_table_path <- "D:\\Studium\\data mining\\Projekt"
 
 setwd(end_table_path)
 
-end_table <- list.files(
-  path = end_table_path, pattern = "*.csv") %>% map_df(~read_csv(.))
+df <- list.files(
+  path = end_table_path, pattern = "stats2.csv") %>% map_df(~read_csv(.))
 
-end_table_filtered <- end_table %>%
-                      select(-club_rep,-club_name,-season,-games_played,-points)
+#remove duplicates
+df <-  df[!duplicated(df), ]
 
-#view(end_table_filtered)
+#remove irrelevant columns
+df <- df %>% select(-club,-season,-side,-matchday,-erfolgreiche_saison)
 
+# view(df)
+
+#set seed and create row id for splitting into train and test dataset
 set.seed(1)
+df$id <- 1:nrow(df)
 
-end_table_filtered$id <- 1:nrow(end_table_filtered)
+#use 80% of dataset as training set and 20% as test set 
+train <- df %>% dplyr::sample_frac(0.80)
+test  <- dplyr::anti_join(df, train, by = 'id')
 
-#use 70% of dataset as training set and 30% as test set 
-train <- end_table_filtered %>% dplyr::sample_frac(0.80)
-test  <- dplyr::anti_join(end_table_filtered, train, by = 'id')
+#train model based on train dataset 
+#response variable is end_rank
+fit <- rpart(end_rank~., data = train, method = 'anova')
 
-# view(train)
-# view(test)
-
-library(rpart)
-library(rpart.plot)
-fit <- rpart(rank~., data = train, method = 'anova')
+#visualization
 rpart.plot(fit, extra = 101)
 
+#use trained model to predict for test dataset
 predict_unseen <-predict(fit, test, type = 'vector')
 
-table_mat <- table(test$rank, predict_unseen)
-view(table_mat)
+#format the result of prediction
+table_mat <- table(test$end_rank, predict_unseen)
+
+ view(table_mat)
