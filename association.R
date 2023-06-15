@@ -1,4 +1,4 @@
-library(conflicted)  
+library(conflicted)
 library(tidyverse)
 library("arules")
 library("arulesViz")
@@ -6,57 +6,48 @@ conflict_prefer("filter", "dplyr")
 conflict_prefer("lag", "dplyr")
 conflicts_prefer(arules::setdiff)
 library(arulesCBA)
-
-end_table_path <- "D:\\Studium\\data mining\\Projekt\\tabelle_saison_csv"
-
+library(data.table)
+end_table_path <- "D:\\Studium\\data mining\\Projekt"
+library(ggplot2)
 setwd(end_table_path)
 
-end_table <- list.files(
-  path = end_table_path, pattern = "*.csv") %>% map_df(~read_csv(.))
+df <- list.files(
+  path = end_table_path, pattern = "stats2.csv"
+) %>% map_df(~ read_csv(.))
 
-df <- end_table %>%
-                      select(-club_rep,-club_name,-season,-games_played,-points)
+# remove duplicates
+df <- df[!duplicated(df), ]
 
-## Discretize "MonthlyCharges" with respect to "Churn"/"No Churn" label and assign to new column in dataframe
-# df$cat <- discretizeDF.supervised(rank ~ ., df[, c('wins', 'rank')], method='mdlp')$wins
-print(colnames(df))
-df$wins <- discretize(df$wins, method="interval",breaks=18, labels = NULL,    
-                           ordered=TRUE, onlycuts=FALSE)
+# remove irrelevant columns
+df <- df %>% select(-club, -season, -side, -matchday, -erfolgreiche_saison)
 
-df$ties <- discretize(df$ties, method="interval",breaks=18, labels = NULL,    
-                           ordered=TRUE, onlycuts=FALSE) 
-
-df$losses <- discretize(df$losses, method="interval",breaks=18, labels = NULL,    
-                           ordered=TRUE, onlycuts=FALSE)
-
-df$goals_scored <- discretize(df$goals_scored, method="interval",breaks=18, labels = NULL,    
-                           ordered=TRUE, onlycuts=FALSE)
-
-df$goals_scored_against <- discretize(df$goals_scored_against, method="interval",breaks=18, labels = NULL,    
-                           ordered=TRUE, onlycuts=FALSE)  
-
- df$goal_difference <- discretize(df$goal_difference, method="interval",breaks=18, labels = NULL,    
-                           ordered=TRUE, onlycuts=FALSE)                                                     
-
-#print(unique(df$wins))
-# Check levels of binned variable
-#view(df)
+for (name in colnames(df)) {
+  df[[name]] <- discretize(df[[name]], method = "interval", breaks = 6, labels = NULL, ordered = TRUE, onlycuts = FALSE)
+}
 
 df[sapply(df, is.numeric)] <- lapply(df[sapply(df, is.numeric)], as.factor)
 
-
 trans <- as(df, "transactions")
 
-itemFrequencyPlot(trans, topN=10,  cex.names=1)
+# itemFrequencyPlot(trans, topN=10,  cex.names=1)
 
-# #sup=0.01 conf=0.03 -> 3 rules
-rank_1_rules <- apriori(data=df, 
-                        parameter=list (supp=0.01,conf = 0.03), 
-                        appearance = list (rhs="rank=1"),
-                        minlen=2,
-                        maxlen=7)
+support <- 0.07
+confident <- 0.09
 
+for (name in col_names) {
+  uniq_val <- unique(df$end_rank)
+  for (val in uniq_val) {
+    s <- paste("end_rank=", val, sep = "")
+    rules <- apriori(
+      data = df,
+      parameter = list(supp = support, conf = confident),
+      appearance = list(rhs = s),
+      minlen = 2,
+      maxlen = 10
+    )
 
-inspect(rank_1_rules)
-
-#korrelation matrix
+    c <- paste("Top rules of ", s, sep = "")
+    # inspect(rank_1_rules)
+    plot(rules, method = "paracoord", main = c)
+  }
+}
